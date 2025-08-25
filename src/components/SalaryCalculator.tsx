@@ -23,6 +23,8 @@ export function SalaryCalculator() {
     returning_resident: false,
     manual_credit_points: 0,
     months_worked_in_year: 12,
+    use_standard_pension: false,
+    use_study_fund: false,
   });
 
   const [newChildAge, setNewChildAge] = useState<string>('');
@@ -151,6 +153,184 @@ export function SalaryCalculator() {
               <Card className="shadow-medium">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" />
+                    הפרשות והניכויים
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="standard_pension"
+                      checked={input.use_standard_pension}
+                      onCheckedChange={(checked) => updateInput({ use_standard_pension: !!checked })}
+                    />
+                    <Label htmlFor="standard_pension">פנסיה סטנדרטית (7% עובד, 8.33% מעסיק)</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="study_fund"
+                      checked={input.use_study_fund}
+                      onCheckedChange={(checked) => updateInput({ use_study_fund: !!checked })}
+                    />
+                    <Label htmlFor="study_fund">קרן השתלמות (2.5% עובד, 7.5% מעסיק)</Label>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="manual_deductions">ניכויים נוספים חודשיים</Label>
+                    <Input
+                      id="manual_deductions"
+                      type="number"
+                      min="0"
+                      value={input.manual_deductions_monthly || 0}
+                      onChange={(e) => updateInput({ manual_deductions_monthly: parseInt(e.target.value) || 0 })}
+                      placeholder="למשל: ביטוח, הלוואה..."
+                    />
+                  </div>
+
+                  {!input.use_standard_pension && (
+                    <div className="bg-muted/50 p-3 rounded-lg space-y-3">
+                      <Label className="text-sm font-medium">הפרשת פנסיה מותאמת אישית</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label htmlFor="custom_pension_employee" className="text-xs">אחוז עובד</Label>
+                          <Input
+                            id="custom_pension_employee"
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="15"
+                            value={input.custom_pension?.employee_rate ? (input.custom_pension.employee_rate * 100) : ''}
+                            onChange={(e) => {
+                              const rate = parseFloat(e.target.value) / 100 || 0;
+                              updateInput({ 
+                                custom_pension: { 
+                                  ...input.custom_pension,
+                                  employee_rate: rate,
+                                  employer_rate: input.custom_pension?.employer_rate || 0.0833,
+                                  base_salary_only: input.custom_pension?.base_salary_only || false
+                                }
+                              });
+                            }}
+                            placeholder="7"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="custom_pension_employer" className="text-xs">אחוז מעסיק</Label>
+                          <Input
+                            id="custom_pension_employer"
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="20"
+                            value={input.custom_pension?.employer_rate ? (input.custom_pension.employer_rate * 100) : ''}
+                            onChange={(e) => {
+                              const rate = parseFloat(e.target.value) / 100 || 0;
+                              updateInput({ 
+                                custom_pension: { 
+                                  ...input.custom_pension,
+                                  employee_rate: input.custom_pension?.employee_rate || 0.07,
+                                  employer_rate: rate,
+                                  base_salary_only: input.custom_pension?.base_salary_only || false
+                                }
+                              });
+                            }}
+                            placeholder="8.33"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="pension_base_only"
+                          checked={input.custom_pension?.base_salary_only || false}
+                          onCheckedChange={(checked) => updateInput({ 
+                            custom_pension: { 
+                              ...input.custom_pension,
+                              employee_rate: input.custom_pension?.employee_rate || 0.07,
+                              employer_rate: input.custom_pension?.employer_rate || 0.0833,
+                              base_salary_only: !!checked
+                            }
+                          })}
+                        />
+                        <Label htmlFor="pension_base_only" className="text-xs">רק על שכר בסיס (ללא בונוסים)</Label>
+                      </div>
+                    </div>
+                  )}
+
+                  {!input.use_study_fund && (
+                    <div className="bg-muted/50 p-3 rounded-lg space-y-3">
+                      <Label className="text-sm font-medium">קרן השתלמות מותאמת אישית</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label htmlFor="custom_study_employee" className="text-xs">אחוז עובד</Label>
+                          <Input
+                            id="custom_study_employee"
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="10"
+                            value={input.custom_study_fund?.employee_rate ? (input.custom_study_fund.employee_rate * 100) : ''}
+                            onChange={(e) => {
+                              const rate = parseFloat(e.target.value) / 100 || 0;
+                              updateInput({ 
+                                custom_study_fund: { 
+                                  ...input.custom_study_fund,
+                                  employee_rate: rate,
+                                  employer_rate: input.custom_study_fund?.employer_rate || 0.075,
+                                  base_salary_only: input.custom_study_fund?.base_salary_only || true
+                                }
+                              });
+                            }}
+                            placeholder="2.5"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="custom_study_employer" className="text-xs">אחוז מעסיק</Label>
+                          <Input
+                            id="custom_study_employer"
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="15"
+                            value={input.custom_study_fund?.employer_rate ? (input.custom_study_fund.employer_rate * 100) : ''}
+                            onChange={(e) => {
+                              const rate = parseFloat(e.target.value) / 100 || 0;
+                              updateInput({ 
+                                custom_study_fund: { 
+                                  ...input.custom_study_fund,
+                                  employee_rate: input.custom_study_fund?.employee_rate || 0.025,
+                                  employer_rate: rate,
+                                  base_salary_only: input.custom_study_fund?.base_salary_only || true
+                                }
+                              });
+                            }}
+                            placeholder="7.5"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="study_base_only"
+                          checked={input.custom_study_fund?.base_salary_only !== false}
+                          onCheckedChange={(checked) => updateInput({ 
+                            custom_study_fund: { 
+                              ...input.custom_study_fund,
+                              employee_rate: input.custom_study_fund?.employee_rate || 0.025,
+                              employer_rate: input.custom_study_fund?.employer_rate || 0.075,
+                              base_salary_only: !!checked
+                            }
+                          })}
+                        />
+                        <Label htmlFor="study_base_only" className="text-xs">רק על שכר בסיס (ללא בונוסים)</Label>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-medium">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
                     <Users className="h-5 w-5" />
                     ילדים
                   </CardTitle>
@@ -205,6 +385,54 @@ export function SalaryCalculator() {
 
               {/* Breakdown Cards */}
               <div className="grid md:grid-cols-2 gap-4">
+                {(result.pension_employee > 0 || result.study_fund_employee > 0 || result.manual_deductions > 0) && (
+                  <Card className="shadow-medium md:col-span-2">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <TrendingUp className="h-4 w-4" />
+                        הפרשות וניכויים
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {result.pension_employee > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">פנסיה (עובד)</span>
+                          <span className="font-semibold">{formatCurrency(result.pension_employee)}</span>
+                        </div>
+                      )}
+                      {result.study_fund_employee > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">קרן השתלמות</span>
+                          <span className="font-semibold">{formatCurrency(result.study_fund_employee)}</span>
+                        </div>
+                      )}
+                      {result.manual_deductions > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">ניכויים נוספים</span>
+                          <span className="font-semibold">{formatCurrency(result.manual_deductions)}</span>
+                        </div>
+                      )}
+                      {(result.breakdown.contributions.pension_employer > 0 || result.breakdown.contributions.study_fund_employer > 0) && (
+                        <>
+                          <Separator />
+                          <div className="text-sm text-muted-foreground">הפרשות מעסיק:</div>
+                          {result.breakdown.contributions.pension_employer > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">פנסיה (מעסיק)</span>
+                              <span className="font-semibold text-success">+{formatCurrency(result.breakdown.contributions.pension_employer)}</span>
+                            </div>
+                          )}
+                          {result.breakdown.contributions.study_fund_employer > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">קרן השתלמות (מעסיק)</span>
+                              <span className="font-semibold text-success">+{formatCurrency(result.breakdown.contributions.study_fund_employer)}</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
                 <Card className="shadow-medium">
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -266,12 +494,20 @@ export function SalaryCalculator() {
                     <CardTitle className="flex items-center gap-2 text-lg">
                       <TrendingUp className="h-4 w-4" />
                       עלות מעסיק
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="h-4 w-4 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>כולל שכר ברוטו + ביטוח לאומי מעסיק + הפרשות פנסיה וקרן השתלמות</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="text-center">
                       <p className="text-2xl font-bold text-primary">{formatCurrency(result.employer_cost)}</p>
-                      <p className="text-sm text-muted-foreground">כולל הפרשות מעסיק</p>
+                      <p className="text-sm text-muted-foreground">עלות מעסיק כוללת</p>
                     </div>
                   </CardContent>
                 </Card>

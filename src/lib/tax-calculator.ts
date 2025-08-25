@@ -29,6 +29,21 @@ export interface NISettings {
   rate_high_health: number;
 }
 
+// Standard Israeli contribution rates for 2025
+export const STANDARD_CONTRIBUTIONS_2025 = {
+  pension: {
+    employee_rate: 0.07, // 7%
+    employer_rate: 0.0833, // 8.33%
+    base_salary_only: false,
+  } as PensionContributions,
+  
+  study_fund: {
+    employee_rate: 0.025, // 2.5%
+    employer_rate: 0.075, // 7.5%
+    base_salary_only: true, // Usually applied to base salary only
+  } as StudyFundContributions,
+};
+
 // 2025 Tax Settings
 export const TAX_SETTINGS_2025 = {
   tax_brackets_annual: [
@@ -68,6 +83,18 @@ export interface Child {
   age: number;
 }
 
+export interface PensionContributions {
+  employee_rate: number; // e.g., 0.07 for 7%
+  employer_rate: number; // e.g., 0.0833 for 8.33%
+  base_salary_only: boolean; // whether to apply only to base salary or total
+}
+
+export interface StudyFundContributions {
+  employee_rate: number; // e.g., 0.025 for 2.5%
+  employer_rate: number; // e.g., 0.075 for 7.5%
+  base_salary_only: boolean;
+}
+
 export interface CalculationInput {
   gross_monthly: number;
   is_resident: boolean;
@@ -80,10 +107,22 @@ export interface CalculationInput {
   manual_credit_points: number;
   months_worked_in_year: number;
   bonus_current_month?: number;
+  
+  // Pension contributions
+  use_standard_pension: boolean;
+  custom_pension?: PensionContributions;
+  
+  // Study fund contributions
+  use_study_fund: boolean;
+  custom_study_fund?: StudyFundContributions;
+  
+  // Manual deductions
+  manual_deductions_monthly?: number;
 }
 
 export interface CalculationResult {
   gross: number;
+  taxable_income: number; // After pension contributions
   income_tax_before_credits: number;
   credit_points: {
     auto: number;
@@ -95,9 +134,16 @@ export interface CalculationResult {
   income_tax_after_credits: number;
   national_insurance: number;
   health_tax: number;
+  
+  // Contributions
+  pension_employee: number;
+  study_fund_employee: number;
+  manual_deductions: number;
+  
   total_deductions: number;
   net: number;
   employer_cost: number;
+  
   breakdown: {
     tax_by_bracket: Array<{
       bracket: TaxBracket;
@@ -111,6 +157,12 @@ export interface CalculationResult {
     health_breakdown: {
       low_part: number;
       high_part: number;
+    };
+    contributions: {
+      pension_employee: number;
+      pension_employer: number;
+      study_fund_employee: number;
+      study_fund_employer: number;
     };
   };
 }
@@ -222,12 +274,53 @@ export function calculateNationalInsuranceAndHealth(grossMonthly: number, isResi
   };
 }
 
+export function calculateContributions(grossMonthly: number, input: CalculationInput) {
+  let pensionEmployee = 0;
+  let pensionEmployer = 0;
+  let studyFundEmployee = 0;
+  let studyFundEmployer = 0;
+  
+  // Pension contributions
+  if (input.use_standard_pension || input.custom_pension) {
+    const pensionSettings = input.custom_pension || STANDARD_CONTRIBUTIONS_2025.pension;
+    const pensionBase = pensionSettings.base_salary_only ? input.gross_monthly : grossMonthly;
+    
+    pensionEmployee = pensionBase * pensionSettings.employee_rate;
+    pensionEmployer = pensionBase * pensionSettings.employer_rate;
+  }
+  
+  // Study fund contributions
+  if (input.use_study_fund || input.custom_study_fund) {
+    const studyFundSettings = input.custom_study_fund || STANDARD_CONTRIBUTIONS_2025.study_fund;
+    const studyFundBase = studyFundSettings.base_salary_only ? input.gross_monthly : grossMonthly;
+    
+    studyFundEmployee = studyFundBase * studyFundSettings.employee_rate;
+    studyFundEmployer = studyFundBase * studyFundSettings.employer_rate;
+  }
+  
+  return {
+    pension_employee: pensionEmployee,
+    pension_employer: pensionEmployer,
+    study_fund_employee: studyFundEmployee,
+    study_fund_employer: studyFundEmployer,
+  };
+}
+
 export function calculateSalary(input: CalculationInput): CalculationResult {
   const grossMonthly = input.gross_monthly + (input.bonus_current_month || 0);
-  const grossAnnual = grossMonthly * 12; // For tax calculation purposes
+  
+  // Calculate contributions
+  const contributions = calculateContributions(grossMonthly, input);
+  
+  // Manual deductions
+  const manualDeductions = input.manual_deductions_monthly || 0;
+  
+  // Taxable income (after pension deductions)
+  const taxableMonthly = grossMonthly - contributions.pension_employee;
+  const taxableAnnual = taxableMonthly * 12;
 
-  // Calculate income tax
-  const { tax: annualTax, breakdown: taxBreakdown } = calculateIncomeTax(grossAnnual);
+  // Calculate income tax on taxable income
+  const { tax: annualTax, breakdown: taxBreakdown } = calculateIncomeTax(taxableAnnual);
   const monthlyTaxBeforeCredits = annualTax / 12;
 
   // Calculate credit points
@@ -238,19 +331,25 @@ export function calculateSalary(input: CalculationInput): CalculationResult {
   // Tax after credits (cannot be negative)
   const monthlyTaxAfterCredits = Math.max(0, monthlyTaxBeforeCredits - creditValue);
 
-  // Calculate NI and Health
+  // Calculate NI and Health (on gross before pension)
   const niAndHealth = calculateNationalInsuranceAndHealth(grossMonthly, input.is_resident);
 
   // Calculate totals
-  const totalDeductions = monthlyTaxAfterCredits + niAndHealth.national_insurance + niAndHealth.health_tax;
+  const totalDeductions = monthlyTaxAfterCredits + 
+                         niAndHealth.national_insurance + 
+                         niAndHealth.health_tax + 
+                         contributions.pension_employee + 
+                         contributions.study_fund_employee + 
+                         manualDeductions;
   const net = grossMonthly - totalDeductions;
 
-  // Employer cost (rough estimate)
+  // Employer cost
   const employerNI = grossMonthly * 0.0361; // Simplified employer NI rate
-  const employerCost = grossMonthly + employerNI;
+  const employerCost = grossMonthly + employerNI + contributions.pension_employer + contributions.study_fund_employer;
 
   return {
     gross: grossMonthly,
+    taxable_income: taxableMonthly,
     income_tax_before_credits: monthlyTaxBeforeCredits,
     credit_points: {
       auto: autoCreditPoints,
@@ -262,6 +361,9 @@ export function calculateSalary(input: CalculationInput): CalculationResult {
     income_tax_after_credits: monthlyTaxAfterCredits,
     national_insurance: niAndHealth.national_insurance,
     health_tax: niAndHealth.health_tax,
+    pension_employee: contributions.pension_employee,
+    study_fund_employee: contributions.study_fund_employee,
+    manual_deductions: manualDeductions,
     total_deductions: totalDeductions,
     net: net,
     employer_cost: employerCost,
@@ -269,6 +371,7 @@ export function calculateSalary(input: CalculationInput): CalculationResult {
       tax_by_bracket: taxBreakdown,
       ni_breakdown: niAndHealth.breakdown.ni_breakdown,
       health_breakdown: niAndHealth.breakdown.health_breakdown,
+      contributions: contributions,
     },
   };
 }
